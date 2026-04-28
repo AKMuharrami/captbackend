@@ -20,16 +20,17 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001; // Can run on any port e.g., Railway gives you PORT
 
-app.use(cors({
-  origin: 'https://www.mumantij-ai.com',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-})); // VERY important because frontend will be on a different domain
-app.options('*', cors({
-  origin: 'https://www.mumantij-ai.com',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-})); // Enable pre-flight across-the-board
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
 
 // Set the native ffmpeg binary path for fluent-ffmpeg
 let validFfmpegPath = ffmpegStatic;
@@ -40,8 +41,12 @@ ffmpeg.setFfmpegPath(validFfmpegPath as string);
 console.log(`[FFmpeg] Using native binary at: ${validFfmpegPath}`);
 
 // Configure Multer for processing incoming video uploads directly to disk temporary storage
+const uploadDir = path.join(os.tmpdir(), 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 const upload = multer({ 
-  dest: path.join(os.tmpdir(), 'uploads'),
+  dest: uploadDir,
   limits: { fileSize: 500 * 1024 * 1024 } // 500MB max limit to cover raw 4K mobile video inputs
 });
 
