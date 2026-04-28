@@ -20,23 +20,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001; // Can run on any port e.g., Railway gives you PORT
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*'); 
-  }
-  
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  next();
-});
+app.use(cors());
+app.use(express.json({limit: "50mb", extended: true} as any));
+app.use(express.urlencoded({limit: "50mb", extended: true, parameterLimit:50000}));
+app.use(express.text({ limit: '200mb' }));
 
 // Set the native ffmpeg binary path for fluent-ffmpeg
 let validFfmpegPath = ffmpegStatic;
@@ -116,7 +103,7 @@ app.get("/api/download-export/:fileId", (req, res) => {
   res.download(filePath, downloadName);
 });
 
-app.post("/api/export-video", express.json({ limit: '50mb' }), upload.single('video'), async (req: any, res: any) => {
+app.post("/api/export-video", upload.single('video'), async (req: any, res: any) => {
   const videoUrl = req.body.videoUrl || '';
   const uploadedFilePath = req.file?.path;
   
