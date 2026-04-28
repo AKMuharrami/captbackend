@@ -20,7 +20,12 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001; // Can run on any port e.g., Railway gives you PORT
 
-app.use(cors()); // VERY important because frontend will be on a different domain
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+})); // VERY important because frontend will be on a different domain
+app.options('*', cors()); // Enable pre-flight across-the-board
 
 // Set the native ffmpeg binary path for fluent-ffmpeg
 let validFfmpegPath = ffmpegStatic;
@@ -240,6 +245,6 @@ app.get("/api/export-status/:jobId", async (req: any, res: any) => {
    res.status(404).json({ error: "Job not found or expired" });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT as number, "0.0.0.0", () => {
   console.log(`Server is running on port ${PORT}`);
 });
