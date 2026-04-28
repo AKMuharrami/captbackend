@@ -158,29 +158,29 @@ app.post("/api/export-video", express.json({ limit: '50mb' }), upload.single('vi
         targetW = Math.floor(targetW / 2) * 2;
         targetH = Math.floor(targetH / 2) * 2;
 
-        const scaleFilter = \`scale=\${targetW}:\${targetH}:flags=fast_bilinear\`;
+        const scaleFilter = `scale=${targetW}:${targetH}:flags=fast_bilinear`;
         let fontName = requestedFont || 'DejaVu Sans';
 
-        const escapedSrtPath = srtFileName.replace(/\\\\/g, '/').replace(/'/g, "'\\\\''");
+        const escapedSrtPath = srtFileName.replace(/\\/g, '/').replace(/'/g, "'\\''");
         let cleanStyle = assStyle ? assStyle.trim().replace(/,$/, '') : '';
         
         if (!cleanStyle.includes("Fontname=")) {
-           cleanStyle = \`Fontname='\${fontName}',\` + cleanStyle;
+           cleanStyle = `Fontname='${fontName}',` + cleanStyle;
         } else {
-           cleanStyle = cleanStyle.replace(/Fontname=[^,]+/, \`Fontname='\${fontName}'\`);
+           cleanStyle = cleanStyle.replace(/Fontname=[^,]+/, `Fontname='${fontName}'`);
         }
         
-        const escapedFontsDir = fontsDir.replace(/\\\\/g, '/').replace(/'/g, "'\\\\''").replace(/:/g, '\\\\\\\\:');
+        const escapedFontsDir = fontsDir.replace(/\\/g, '/').replace(/'/g, "'\\''").replace(/:/g, '\\\\:');
         
         let subtitleFilter = '';
         if (isAss) {
-          subtitleFilter = \`subtitles='\${escapedSrtPath}':fontsdir='\${escapedFontsDir}'\`;
+          subtitleFilter = `subtitles='${escapedSrtPath}':fontsdir='${escapedFontsDir}'`;
         } else {
-          subtitleFilter = \`subtitles='\${escapedSrtPath}':fontsdir='\${escapedFontsDir}':force_style='\${cleanStyle}'\`;
+          subtitleFilter = `subtitles='${escapedSrtPath}':fontsdir='${escapedFontsDir}':force_style='${cleanStyle}'`;
         }
         
-        const filterStr = \`\${scaleFilter},\${subtitleFilter}\`;
-        console.log(\`[Export Background] Starting FFmpeg Filter: \${filterStr}\`);
+        const filterStr = `${scaleFilter},${subtitleFilter}`;
+        console.log(`[Export Background] Starting FFmpeg Filter: ${filterStr}`);
 
         const args = [
           '-y',
@@ -202,15 +202,15 @@ app.post("/api/export-video", express.json({ limit: '50mb' }), upload.single('vi
           const ffmpegProcess = spawn(validFfmpegPath as string, args);
           ffmpegProcess.on('close', (code: number) => {
             if (code === 0) resolve();
-            else reject(new Error(\`FFmpeg exited with code \${code}\`));
+            else reject(new Error(`FFmpeg exited with code ${code}`));
           });
           ffmpegProcess.on('error', (err: Error) => {
-            reject(new Error(\`FFmpeg spawn failed: \${err.message}\`));
+            reject(new Error(`FFmpeg spawn failed: ${err.message}`));
           });
         });
 
       // Provide complete backend URL for download
-      const downloadUrl = \`/api/download-export/\${sessionId}?name=captioned_\${encodeURIComponent(safeOriginalName)}\`;
+      const downloadUrl = `/api/download-export/${sessionId}?name=captioned_${encodeURIComponent(safeOriginalName)}`;
       exportJobs.set(sessionId, { status: 'completed', downloadUrl });
 
       setTimeout(() => {
@@ -221,7 +221,7 @@ app.post("/api/export-video", express.json({ limit: '50mb' }), upload.single('vi
       }, 30 * 60 * 1000);
 
     } catch (err: any) {
-      console.error(\`[Export Background] Fatal Error for \${sessionId}:\`, err);
+      console.error(`[Export Background] Fatal Error for ${sessionId}:`, err);
       exportJobs.set(sessionId, { status: 'failed', error: err.message || "Video processing failed." });
     } finally {
       [uploadedFilePath, srtFileName].forEach(p => {
@@ -241,5 +241,5 @@ app.get("/api/export-status/:jobId", async (req: any, res: any) => {
 });
 
 app.listen(PORT, () => {
-  console.log(\`Server is running on port \${PORT}\`);
+  console.log(`Server is running on port ${PORT}`);
 });
