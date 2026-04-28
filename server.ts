@@ -20,16 +20,15 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001; // Can run on any port e.g., Railway gives you PORT
 
-app.use(cors({
+const corsOptions = {
   origin: 'https://www.mumantij-ai.com',
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-})); // VERY important because frontend will be on a different domain
-app.options('*', cors({
-  origin: 'https://www.mumantij-ai.com',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-})); // Enable pre-flight across-the-board
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
+app.use(cors(corsOptions)); // VERY important because frontend will be on a different domain
+app.options('*', cors(corsOptions)); // Enable pre-flight across-the-board
 
 // Set the native ffmpeg binary path for fluent-ffmpeg
 let validFfmpegPath = ffmpegStatic;
