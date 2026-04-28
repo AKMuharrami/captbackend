@@ -20,17 +20,18 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001; // Can run on any port e.g., Railway gives you PORT
 
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  next();
-});
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || ['https://www.mumantij-ai.com', 'https://mumantij-ai.com', 'http://localhost:3000', 'http://localhost:5173'].includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, origin || true);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
+}));
 
 // Set the native ffmpeg binary path for fluent-ffmpeg
 let validFfmpegPath = ffmpegStatic;
