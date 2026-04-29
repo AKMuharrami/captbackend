@@ -133,7 +133,7 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
   }
 
   const sessionId = uuidv4().substring(0, 8);
-  const videoSource = uploadedFilePath || videoUrl;
+  let videoSource = uploadedFilePath || videoUrl;
   
   exportJobs.set(sessionId, { status: 'processing' });
   res.json({ jobId: sessionId });
@@ -141,8 +141,18 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
   (async () => {
     let srtFileName: string | undefined;
     let outputPath: string | undefined;
+    let downloadedVideoPath: string | undefined;
     
     try {
+        if (videoSource.startsWith('http')) {
+           console.log(`[Export Background] Downloading video from URL to avoid FFmpeg TLS issues...`);
+           const dlRes = await fetch(videoSource);
+           if (!dlRes.ok) throw new Error('Failed to download video from URL');
+           const arr = await dlRes.arrayBuffer();
+           downloadedVideoPath = path.join(os.tmpdir(), `dl_${sessionId}.mp4`);
+           fs.writeFileSync(downloadedVideoPath, Buffer.from(arr));
+           videoSource = downloadedVideoPath;
+        }
         let requestedFont = null;
         if (isAss) {
           const match = srtContent.match(/Style:\s*[^,]+,([^,]+)/);
@@ -218,9 +228,17 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
 
         await new Promise<void>((resolve, reject) => {
           const ffmpegProcess = spawn(validFfmpegPath as string, args);
-          ffmpegProcess.on('close', (code: number) => {
+          let errorOutput = '';
+          ffmpegProcess.stderr.on('data', (data) => {
+            console.log(`[FFmpeg stderr]: ${data.toString()}`);
+            errorOutput += data.toString();
+          });
+          ffmpegProcess.stdout.on('data', (data) => {
+            console.log(`[FFmpeg stdout]: ${data.toString()}`);
+          });
+          ffmpegProcess.on('close', (code, signal) => {
             if (code === 0) resolve();
-            else reject(new Error(`FFmpeg exited with code ${code}`));
+            else reject(new Error(`FFmpeg exited with code ${code}, signal: ${signal}, stderr: ${errorOutput}`));
           });
           ffmpegProcess.on('error', (err: Error) => {
             reject(new Error(`FFmpeg spawn failed: ${err.message}`));
@@ -242,7 +260,7 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
       console.error(`[Export Background] Fatal Error for ${sessionId}:`, err);
       exportJobs.set(sessionId, { status: 'failed', error: err.message || "Video processing failed." });
     } finally {
-      [uploadedFilePath, srtFileName].forEach(p => {
+      [uploadedFilePath, srtFileName, downloadedVideoPath].forEach(p => {
         try { if (p && fs.existsSync(p)) fs.unlinkSync(p); } catch(e){}
       });
       // Try to clean up vercel blob if we used it (graceful fail)
