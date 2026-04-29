@@ -1,2 +1,0 @@
-[phases.setup]
-nixPkgs = ["...", "nss", "nspr", "alsa-lib", "atk", "cairo", "cups", "dbus", "expat", "fontconfig", "freetype", "glib", "gtk3", "pango", "mesa"]
