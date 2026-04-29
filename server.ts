@@ -179,8 +179,8 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
         const fontsDir = await ensureFont(requestedFont || 'DejaVu Sans');
         fs.writeFileSync(srtFileName, srtContent);
 
-        const vW = parseInt(videoWidth) || 1080;
-        const vH = parseInt(videoHeight) || 1920;
+        const vW = parseInt(videoWidth || '1080') || 1080;
+        const vH = parseInt(videoHeight || '1920') || 1920;
 
         let targetW = vW;
         let targetH = vH;
@@ -192,14 +192,14 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
           targetH = Math.round(targetH * scale);
         }
 
-        targetW = Math.floor(targetW / 2) * 2;
-        targetH = Math.floor(targetH / 2) * 2;
+        targetW = Math.max(2, Math.floor(targetW / 2) * 2);
+        targetH = Math.max(2, Math.floor(targetH / 2) * 2);
 
         let captionsJson: any = null;
         let styleOptionsParsed: any = null;
         try {
-            if (req.body.captionsJson) captionsJson = JSON.parse(req.body.captionsJson);
-            if (req.body.styleOptions) styleOptionsParsed = JSON.parse(req.body.styleOptions);
+            if (req.body.captionsJson) captionsJson = typeof req.body.captionsJson === 'string' ? JSON.parse(req.body.captionsJson) : req.body.captionsJson;
+            if (req.body.styleOptions) styleOptionsParsed = typeof req.body.styleOptions === 'string' ? JSON.parse(req.body.styleOptions) : req.body.styleOptions;
         } catch (e) {}
 
         if (captionsJson && styleOptionsParsed) {
@@ -217,39 +217,51 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
 
             console.log(`[Export] Local Video URL for Remotion: ${localVideoUrl}`);
 
+            // Ensure duration is a valid positive number
+            const rawDuration = parseFloat(req.body.duration);
+            const validDuration = (isNaN(rawDuration) || rawDuration <= 0) ? 10 : rawDuration;
+            const durationInFrames = Math.max(1, Math.ceil(validDuration * 30));
+
             const inputProps = {
                 videoUrl: videoSource.startsWith('http') ? videoSource : localVideoUrl,
                 captions: captionsJson,
                 styleOptions: styleOptionsParsed,
-                videoWidth: targetW,
-                videoHeight: targetH,
-                durationInFrames: Math.ceil((req.body.duration || 10) * 30)
+                videoWidth: Number(targetW),
+                videoHeight: Number(targetH),
+                durationInFrames: Number(durationInFrames)
             };
 
-            const composition = await selectComposition({
-                serveUrl: bundleLocation,
-                id: 'Captions',
-                inputProps
-            });
+            console.log(`[Export] Final Render Config: w=${targetW}, h=${targetH}, frames=${durationInFrames}`);
 
-            await renderMedia({
-                composition,
-                serveUrl: bundleLocation,
-                codec: 'h264',
-                outputLocation: outputPath,
-                inputProps,
-                offthreadVideoCacheSizeInBytes: 0,
-                chromiumOptions: {
-                   gl: 'angle',
-                   args: [
-                       "--no-sandbox", 
-                       "--disable-setuid-sandbox",
-                       "--allow-file-access-from-files",
-                       "--disable-web-security"
-                   ]
-                }
-            });
-            console.log("[Export] Remotion rendering completed.");
+            try {
+                const composition = await selectComposition({
+                    serveUrl: bundleLocation,
+                    id: 'Captions',
+                    inputProps
+                });
+
+                await renderMedia({
+                    composition,
+                    serveUrl: bundleLocation,
+                    codec: 'h264',
+                    outputLocation: outputPath,
+                    inputProps,
+                    offthreadVideoCacheSizeInBytes: 0,
+                    chromiumOptions: {
+                       gl: 'angle',
+                       args: [
+                           "--no-sandbox", 
+                           "--disable-setuid-sandbox",
+                           "--allow-file-access-from-files",
+                           "--disable-web-security"
+                       ]
+                    }
+                });
+                console.log("[Export] Remotion rendering completed.");
+            } catch (renderErr: any) {
+                console.error("[Export] Remotion renderMedia error:", renderErr);
+                throw new Error(`Remotion Engine Error: ${renderErr.message || renderErr}`);
+            }
         } else {
             console.log("[Export Background] Using FFmpeg fallback rendering...");
             const scaleFilter = `scale=${targetW}:${targetH}:flags=fast_bilinear`;
