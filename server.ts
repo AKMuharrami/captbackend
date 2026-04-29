@@ -36,6 +36,8 @@ app.use(express.json({limit: "50mb"}));
 app.use(express.urlencoded({limit: "50mb", extended: true, parameterLimit:50000}));
 app.use(express.text({ limit: '200mb' }));
 
+app.use("/temp", express.static(os.tmpdir()));
+
 // Set the native ffmpeg binary path for fluent-ffmpeg
 let validFfmpegPath = ffmpegStatic;
 if (!validFfmpegPath) {
@@ -202,8 +204,12 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
                 entryPoint: path.resolve('./remotion/index.ts')
             });
 
+            const videoBasename = path.basename(videoSource);
+            const relativePath = path.relative(os.tmpdir(), videoSource);
+            const localVideoUrl = `http://localhost:${PORT}/temp/${relativePath.replace(/\\/g, '/')}`;
+
             const inputProps = {
-                videoUrl: videoSource.startsWith('http') ? videoSource : 'file://' + path.resolve(videoSource),
+                videoUrl: videoSource.startsWith('http') ? videoSource : localVideoUrl,
                 captions: captionsJson,
                 styleOptions: styleOptionsParsed,
                 videoWidth: targetW,
