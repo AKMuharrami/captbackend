@@ -1,6 +1,10 @@
 import express from "express";
 import path from "path";
+import { fileURLToPath } from "url";
 import os from "os";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import fs from "fs";
 import { spawn } from "child_process";
 import { v4 as uuidv4 } from "uuid";
@@ -36,7 +40,10 @@ app.use(express.json({limit: "50mb"}));
 app.use(express.urlencoded({limit: "50mb", extended: true, parameterLimit:50000}));
 app.use(express.text({ limit: '200mb' }));
 
-app.use("/temp", express.static(os.tmpdir()));
+app.use("/temp", (req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  next();
+}, express.static(os.tmpdir()));
 
 // Set the native ffmpeg binary path for fluent-ffmpeg
 let validFfmpegPath = ffmpegStatic;
@@ -201,12 +208,14 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
             const { renderMedia, selectComposition } = await import('@remotion/renderer');
             
             const bundleLocation = await bundle({
-                entryPoint: path.resolve('./remotion/index.ts')
+                entryPoint: path.join(__dirname, 'remotion', 'index.ts')
             });
 
             const videoBasename = path.basename(videoSource);
             const relativePath = path.relative(os.tmpdir(), videoSource);
-            const localVideoUrl = `http://localhost:${PORT}/temp/${relativePath.replace(/\\/g, '/')}`;
+            const localVideoUrl = `http://127.0.0.1:${PORT}/temp/${relativePath.replace(/\\/g, '/')}`;
+
+            console.log(`[Export] Local Video URL for Remotion: ${localVideoUrl}`);
 
             const inputProps = {
                 videoUrl: videoSource.startsWith('http') ? videoSource : localVideoUrl,
@@ -229,6 +238,7 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
                 codec: 'h264',
                 outputLocation: outputPath,
                 inputProps,
+                offthreadVideoCacheSizeInBytes: 0,
                 chromiumOptions: {
                    gl: 'angle',
                    args: [

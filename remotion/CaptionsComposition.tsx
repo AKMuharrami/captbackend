@@ -11,6 +11,8 @@ export const CaptionsComposition = ({
     const { fps } = useVideoConfig();
     const currentTime = frame / fps;
 
+    console.log('[Remotion] Rendering frame', frame, 'videoUrl:', videoUrl);
+
     const [handle] = useState(() => delayRender('Loading fonts...'));
     const [fontLoaded, setFontLoaded] = useState(false);
 
@@ -86,7 +88,12 @@ export const CaptionsComposition = ({
 
     return (
         <AbsoluteFill style={{ backgroundColor: 'black' }}>
-            <Video src={videoUrl} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <Video 
+                src={videoUrl} 
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                muted
+                onError={(e) => console.error('Video error:', e)}
+            />
             
             {activeCaption && fontLoaded && (
                 <div style={{
