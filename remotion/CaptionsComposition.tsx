@@ -51,13 +51,15 @@ export const CaptionsComposition = ({
         }
 
         if (fontUrl) {
-            const font = new FontFace(displayFont, `url(${fontUrl})`);
+            const font = new FontFace(displayFont, `url(${fontUrl})`, {
+                weight: styleOptions.fontWeight || 'normal'
+            });
             font.load().then(() => {
                 document.fonts.add(font);
                 setFontLoaded(true);
                 continueRender(handle);
-            }).catch(() => {
-                console.error('Failed to load font:', displayFont);
+            }).catch((err) => {
+                console.error('Failed to load font:', displayFont, err);
                 setFontLoaded(true);
                 continueRender(handle);
             });

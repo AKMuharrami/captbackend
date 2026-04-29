@@ -225,7 +225,12 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
                 inputProps,
                 chromiumOptions: {
                    gl: 'angle',
-                   args: ["--no-sandbox", "--disable-setuid-sandbox"]
+                   args: [
+                       "--no-sandbox", 
+                       "--disable-setuid-sandbox",
+                       "--allow-file-access-from-files",
+                       "--disable-web-security"
+                   ]
                 }
             });
             console.log("[Export] Remotion rendering completed.");
