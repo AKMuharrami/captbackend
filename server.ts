@@ -207,7 +207,8 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
                 captions: captionsJson,
                 styleOptions: styleOptionsParsed,
                 videoWidth: targetW,
-                videoHeight: targetH
+                videoHeight: targetH,
+                durationInFrames: Math.ceil((req.body.duration || 10) * 30)
             };
 
             const composition = await selectComposition({
