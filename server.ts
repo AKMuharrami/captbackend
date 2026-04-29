@@ -175,7 +175,7 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
 
         let targetW = vW;
         let targetH = vH;
-        const maxDimension = 3840;
+        const maxDimension = 1920;
         
         if (targetW > maxDimension || targetH > maxDimension) {
           const scale = maxDimension / Math.max(targetW, targetH);
@@ -186,64 +186,108 @@ app.post("/api/export-video", upload.single('video'), async (req: any, res: any)
         targetW = Math.floor(targetW / 2) * 2;
         targetH = Math.floor(targetH / 2) * 2;
 
-        const scaleFilter = `scale=${targetW}:${targetH}:flags=fast_bilinear`;
-        let fontName = requestedFont || 'DejaVu Sans';
+        let captionsJson: any = null;
+        let styleOptionsParsed: any = null;
+        try {
+            if (req.body.captionsJson) captionsJson = JSON.parse(req.body.captionsJson);
+            if (req.body.styleOptions) styleOptionsParsed = JSON.parse(req.body.styleOptions);
+        } catch (e) {}
 
-        const escapedSrtPath = srtFileName.replace(/\\/g, '/').replace(/'/g, "'\\''");
-        let cleanStyle = assStyle ? assStyle.trim().replace(/,$/, '') : '';
-        
-        if (!cleanStyle.includes("Fontname=")) {
-           cleanStyle = `Fontname='${fontName}',` + cleanStyle;
+        if (captionsJson && styleOptionsParsed) {
+            console.log("[Export] Using Remotion rendering...");
+            const { bundle } = await import('@remotion/bundler');
+            const { renderMedia, selectComposition } = await import('@remotion/renderer');
+            
+            const bundleLocation = await bundle({
+                entryPoint: path.resolve('./remotion/index.ts')
+            });
+
+            const inputProps = {
+                videoUrl: videoSource.startsWith('http') ? videoSource : 'file://' + path.resolve(videoSource),
+                captions: captionsJson,
+                styleOptions: styleOptionsParsed,
+                videoWidth: targetW,
+                videoHeight: targetH
+            };
+
+            const composition = await selectComposition({
+                serveUrl: bundleLocation,
+                id: 'Captions',
+                inputProps
+            });
+
+            await renderMedia({
+                composition,
+                serveUrl: bundleLocation,
+                codec: 'h264',
+                outputLocation: outputPath,
+                inputProps,
+                chromiumOptions: {
+                   gl: 'angle'
+                }
+            });
+            console.log("[Export] Remotion rendering completed.");
         } else {
-           cleanStyle = cleanStyle.replace(/Fontname=[^,]+/, `Fontname='${fontName}'`);
-        }
-        
-        const escapedFontsDir = fontsDir.replace(/\\/g, '/').replace(/'/g, "'\\''").replace(/:/g, '\\\\:');
-        
-        let subtitleFilter = '';
-        if (isAss) {
-          subtitleFilter = `subtitles='${escapedSrtPath}':fontsdir='${escapedFontsDir}'`;
-        } else {
-          subtitleFilter = `subtitles='${escapedSrtPath}':fontsdir='${escapedFontsDir}':force_style='${cleanStyle}'`;
-        }
-        
-        const filterStr = `${scaleFilter},${subtitleFilter}`;
-        console.log(`[Export Background] Starting FFmpeg Filter: ${filterStr}`);
+            console.log("[Export Background] Using FFmpeg fallback rendering...");
+            const scaleFilter = `scale=${targetW}:${targetH}:flags=fast_bilinear`;
+            let fontName = requestedFont || 'DejaVu Sans';
 
-        const args = [
-          '-y',
-          '-i', videoSource,
-          '-vf', filterStr,
-          '-c:v', 'libx264',
-          '-preset', 'ultrafast',
-          '-profile:v', 'main',
-          '-level', '3.1',
-          '-pix_fmt', 'yuv420p',
-          '-crf', '24',
-          '-c:a', 'copy',
-          '-threads', '0',
-          '-movflags', '+faststart',
-          outputPath
-        ];
+            const escapedSrtPath = srtFileName.replace(/\\/g, '/').replace(/'/g, "'\\''");
+            let cleanStyle = assStyle ? assStyle.trim().replace(/,$/, '') : '';
+            
+            if (!cleanStyle.includes("Fontname=")) {
+                cleanStyle = `Fontname='${fontName}',` + cleanStyle;
+            } else {
+                cleanStyle = cleanStyle.replace(/Fontname=[^,]+/, `Fontname='${fontName}'`);
+            }
+            
+            const escapedFontsDir = fontsDir.replace(/\\/g, '/').replace(/'/g, "'\\''").replace(/:/g, '\\\\:');
+            
+            let subtitleFilter = '';
+            if (isAss) {
+            subtitleFilter = `subtitles='${escapedSrtPath}':fontsdir='${escapedFontsDir}'`;
+            } else {
+            subtitleFilter = `subtitles='${escapedSrtPath}':fontsdir='${escapedFontsDir}':force_style='${cleanStyle}'`;
+            }
+            
+            const filterStr = `${scaleFilter},${subtitleFilter}`;
+            console.log(`[Export Background] Starting FFmpeg Filter: ${filterStr}`);
 
-        await new Promise<void>((resolve, reject) => {
-          const ffmpegProcess = spawn(validFfmpegPath as string, args);
-          let errorOutput = '';
-          ffmpegProcess.stderr.on('data', (data) => {
-            console.log(`[FFmpeg stderr]: ${data.toString()}`);
-            errorOutput += data.toString();
-          });
-          ffmpegProcess.stdout.on('data', (data) => {
-            console.log(`[FFmpeg stdout]: ${data.toString()}`);
-          });
-          ffmpegProcess.on('close', (code, signal) => {
-            if (code === 0) resolve();
-            else reject(new Error(`FFmpeg exited with code ${code}, signal: ${signal}, stderr: ${errorOutput}`));
-          });
-          ffmpegProcess.on('error', (err: Error) => {
-            reject(new Error(`FFmpeg spawn failed: ${err.message}`));
-          });
-        });
+            const args = [
+            '-y',
+            '-i', videoSource,
+            '-vf', filterStr,
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-profile:v', 'main',
+            '-level', '3.1',
+            '-pix_fmt', 'yuv420p',
+            '-crf', '24',
+            '-c:a', 'copy',
+            '-threads', '2',
+            '-movflags', '+faststart',
+            outputPath
+            ];
+
+            await new Promise<void>((resolve, reject) => {
+            const ffmpegProcess = spawn(validFfmpegPath as string, args);
+            let errorOutput = '';
+            ffmpegProcess.stderr.on('data', (data) => {
+                console.log(`[FFmpeg stderr]: ${data.toString()}`);
+                errorOutput += data.toString();
+            });
+            ffmpegProcess.stdout.on('data', (data) => {
+                console.log(`[FFmpeg stdout]: ${data.toString()}`);
+            });
+            ffmpegProcess.on('close', (code, signal) => {
+                if (code === 0) resolve();
+                else reject(new Error(`FFmpeg exited with code ${code}, signal: ${signal}, stderr: ${errorOutput}`));
+            });
+            ffmpegProcess.on('error', (err: Error) => {
+                reject(new Error(`FFmpeg spawn failed: ${err.message}`));
+            });
+            });
+        }
 
       // Provide complete backend URL for download
       const downloadUrl = `/api/download-export/${sessionId}?name=captioned_${encodeURIComponent(safeOriginalName)}`;
